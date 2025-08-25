@@ -31,7 +31,6 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 
 	fmt.Println("uploading thumbnail for video", videoID, "by user", userID)
 
-	// TODO: implement the upload here
 	const maxThumbnailSize = 10 << 20
 
 	err = r.ParseMultipartForm(maxThumbnailSize)
@@ -45,8 +44,10 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, http.StatusBadRequest, "Coudn't extract thumbnail data from form", err)
 	}
 	mediaType := header.Header.Get("Content-type")
-	fileData := make([]byte, 0)
-	io.ReadAll(file)
+	fileData, err := io.ReadAll(file)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Coudn't process thumbnail file", err)
+	}
 
 	video, err := cfg.db.GetVideo(videoID)
 	if err != nil {
