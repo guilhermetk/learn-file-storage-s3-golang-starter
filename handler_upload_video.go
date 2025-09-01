@@ -13,6 +13,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
+	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/util"
 	"github.com/google/uuid"
 )
 
@@ -82,6 +83,27 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	io.Copy(tmpFile, file)
 	tmpFile.Seek(0, io.SeekStart)
 
+	fastStartFilePath, err := util.ProcessVideoForFastStart(tmpFile.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Unable to process video for faststart", nil)
+		return
+	}
+
+	fastStartFile, err := os.Open(fastStartFilePath)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Unable to open processed video for faststart", nil)
+		return
+	}
+	defer os.Remove(fastStartFile.Name())
+	defer fastStartFile.Close()
+
+	aspectRatio, err := util.GetVideoAspectRatio(fastStartFile.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Unable to get video aspect ratio", nil)
+		return
+	}
+	prefix := prefixFromAspectRatio(aspectRatio)
+
 	fileExtension := strings.Split(mediaType, "/")[1]
 	rbS := make([]byte, 32)
 	_, err = rand.Read(rbS)
@@ -91,11 +113,12 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 	randomFileName := base64.RawURLEncoding.EncodeToString(rbS)
 	fileNameWithExtension := strings.Join([]string{randomFileName, fileExtension}, ".")
+	fileNameWithPrefixExtension := strings.Join([]string{prefix, fileNameWithExtension}, "/")
 
 	params := s3.PutObjectInput{
 		Bucket:      &cfg.s3Bucket,
-		Key:         &fileNameWithExtension,
-		Body:        tmpFile,
+		Key:         &fileNameWithPrefixExtension,
+		Body:        fastStartFile,
 		ContentType: &mediaType,
 	}
 	_, err = cfg.s3Client.PutObject(context.TODO(), &params)
@@ -104,7 +127,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	videoURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, fileNameWithExtension)
+	videoURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, fileNameWithPrefixExtension)
 	video.VideoURL = &videoURL
 
 	err = cfg.db.UpdateVideo(video)
@@ -114,4 +137,16 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 
 	respondWithJSON(w, http.StatusOK, video)
+}
+
+func prefixFromAspectRatio(a string) string {
+	if a == "16:9" {
+		return "landscape"
+	}
+
+	if a == "9:16" {
+		return "portrait"
+	}
+
+	return "other"
 }
