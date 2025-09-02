@@ -5,10 +5,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/database"
+	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/util"
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
@@ -133,4 +136,17 @@ func main() {
 
 	log.Printf("Serving on: http://localhost:%s/app/\n", port)
 	log.Fatal(srv.ListenAndServe())
+}
+
+func (cfg *apiConfig) dbVideoToSignedVideo(video database.Video) (database.Video, error) {
+	split := strings.Split(*video.VideoURL, ",")
+	bucket, key := split[0], split[1]
+
+	url, err := util.GeneratePresignedURL(cfg.s3Client, bucket, key, time.Hour*24)
+	if err != nil {
+		return video, err
+	}
+	video.VideoURL = &url
+
+	return video, nil
 }

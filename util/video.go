@@ -3,11 +3,15 @@ package util
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"math"
 	"os/exec"
 	"strings"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 type ffprobeOutput struct {
@@ -25,13 +29,13 @@ func GetVideoAspectRatio(filePath string) (string, error) {
 	cmd.Stdout = output
 	err := cmd.Run()
 	if err != nil {
-		return "", errors.New("UNABLE TO RUN FFPROBE COMMAND")
+		return "", errors.New("unable to run ffprobe command")
 	}
 
 	var outputJSON ffprobeOutput
 	err = json.Unmarshal(output.Bytes(), &outputJSON)
 	if err != nil {
-		return "", errors.New("UNABLE TO PARSE FFPROBE OUTPUT INTO JSON")
+		return "", errors.New("unable to parse ffprobe output into json")
 	}
 
 	for _, stream := range outputJSON.Streams {
@@ -39,7 +43,7 @@ func GetVideoAspectRatio(filePath string) (string, error) {
 			width, height := stream.Width, stream.Height
 
 			if width == 0 || height == 0 {
-				return "", errors.New("INVALID DIMENSIONS")
+				return "", errors.New("invalid dimensions")
 			}
 
 			aspectRatio := math.Round(float64(width) / float64(height))
@@ -67,8 +71,24 @@ func ProcessVideoForFastStart(filePath string) (string, error) {
 
 	err := cmd.Run()
 	if err != nil {
-		return "", errors.New("UNABLE TO PROCESS VIDEO FOR FASTSTART")
+		return "", errors.New("unable to process video for faststart")
 	}
 
 	return processingFileName, nil
+}
+
+func GeneratePresignedURL(s3Client *s3.Client, bucket, key string, expireTime time.Duration) (string, error) {
+	presignClient := s3.NewPresignClient(s3Client)
+
+	presignObject := s3.GetObjectInput{
+		Bucket: &bucket,
+		Key:    &key,
+	}
+
+	req, err := presignClient.PresignGetObject(context.TODO(), &presignObject, s3.WithPresignExpires(expireTime))
+	if err != nil {
+		return "", errors.New("unable to get presigned URL for video")
+	}
+
+	return req.URL, nil
 }
