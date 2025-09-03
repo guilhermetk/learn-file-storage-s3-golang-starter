@@ -3,15 +3,11 @@ package util
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"math"
 	"os/exec"
 	"strings"
-	"time"
-
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 type ffprobeOutput struct {
@@ -75,20 +71,4 @@ func ProcessVideoForFastStart(filePath string) (string, error) {
 	}
 
 	return processingFileName, nil
-}
-
-func GeneratePresignedURL(s3Client *s3.Client, bucket, key string, expireTime time.Duration) (string, error) {
-	presignClient := s3.NewPresignClient(s3Client)
-
-	presignObject := s3.GetObjectInput{
-		Bucket: &bucket,
-		Key:    &key,
-	}
-
-	req, err := presignClient.PresignGetObject(context.TODO(), &presignObject, s3.WithPresignExpires(expireTime))
-	if err != nil {
-		return "", errors.New("unable to get presigned URL for video")
-	}
-
-	return req.URL, nil
 }

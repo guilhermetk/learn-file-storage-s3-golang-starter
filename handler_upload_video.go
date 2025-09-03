@@ -128,7 +128,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	videoURL := fmt.Sprintf("%s,%s", cfg.s3Bucket, fileNameWithPrefixExtension)
+	videoURL := fmt.Sprintf("%s/%s", cfg.s3CfDistribution, fileNameWithPrefixExtension)
 	video.VideoURL = &videoURL
 
 	err = cfg.db.UpdateVideo(video)
@@ -137,13 +137,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	updatedVideo, err := cfg.dbVideoToSignedVideo(video)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Unable to get signed url to video url", err)
-		return
-	}
-
-	respondWithJSON(w, http.StatusOK, updatedVideo)
+	respondWithJSON(w, http.StatusOK, video)
 }
 
 func prefixFromAspectRatio(a string) string {
